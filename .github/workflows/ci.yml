@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-and-audit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -e ".[dev]"
+
+      - name: Run Ruff linter and format check
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Run Pytest suite (strict warnings as errors)
+        run: pytest -v -W error
+
+      - name: Run Grad-Guard Pathology Audit Suite
+        run: grad-guard audit --all
+
+      - name: Run Grad-Guard Determinism Verification
+        run: grad-guard verify-determinism --seed 42 --steps 25
+
+      - name: Run Grad-Guard Telemetry Overhead Benchmark
+        run: grad-guard benchmark
